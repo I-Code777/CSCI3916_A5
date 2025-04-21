@@ -236,28 +236,36 @@ router.post('/movies', authJwtController.isAuthenticated, async (req, res) => {
 });
 
 // PUT update a movie by ID
-router.put('/movies/:id', authJwtController.isAuthenticated, async (req, res) => {
-  const { title, actors } = req.body;
-
-  if (!title || !actors || actors.length === 0) {
-      return res.status(400).json({ success: false, message: 'Movie must have a title and at least one actor.' });
-  }
-
+router.get('/movies/:id', authJwtController.isAuthenticated, async (req, res) => {
   try {
-      const updatedMovie = await Movie.findByIdAndUpdate(
-          req.params.id,
-          { title, actors },
-          { new: true }  // Return the updated movie
-      );
+    const movieId = mongoose.Types.ObjectId(req.params.id);
 
-      if (!updatedMovie) {
-          return res.status(404).json({ success: false, message: 'Movie not found.' });
+    const aggregate = [
+      { $match: { _id: movieId } },
+      {
+        $lookup: {
+          from: 'reviews',
+          localField: '_id',
+          foreignField: 'movieId',
+          as: 'movieReviews'
+        }
+      },
+      {
+        $addFields: {
+          avgRating: { $avg: '$movieReviews.rating' }
+        }
       }
+    ];
 
-      res.json(updatedMovie);  // Return the updated movie
+    const movie = await Movie.aggregate(aggregate);
+    if (!movie || movie.length === 0) {
+      return res.status(404).json({ success: false, message: 'Movie not found.' });
+    }
+
+    res.json(movie[0]);
   } catch (err) {
-      console.error(err);
-      res.status(500).json({ success: false, message: 'Failed to update movie.' });
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Failed to fetch movie details.' });
   }
 });
 
