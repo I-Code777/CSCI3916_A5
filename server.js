@@ -175,13 +175,42 @@ router.delete('/users/:id', authJwtController.isAuthenticated, async (req, res) 
 // GET all movies
 router.get('/movies', authJwtController.isAuthenticated, async (req, res) => {
   try {
-      const movies = await Movie.find();  // Fetch all movies from MongoDB
-      res.json(movies);  // Send the movies in the response
+    if (req.query.reviews === 'true') {
+      // If reviews=true, run the aggregation
+      const aggregate = [
+        {
+          $lookup: {
+            from: 'reviews',
+            localField: '_id',
+            foreignField: 'movieId',
+            as: 'movieReviews'
+          }
+        },
+        {
+          $addFields: {
+            avgRating: { $avg: '$movieReviews.rating' }
+          }
+        },
+        {
+          $sort: { avgRating: -1 }
+        }
+      ];
+
+      const movies = await Movie.aggregate(aggregate);
+      res.json(movies);
+
+    } else {
+      // Otherwise, just return normal movie list
+      const movies = await Movie.find();
+      res.json(movies);
+    }
+
   } catch (err) {
-      console.error(err);
-      res.status(500).json({ success: false, message: 'Failed to fetch movies.' });
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Failed to fetch movies.' });
   }
 });
+
 
 // POST a new movie
 router.post('/movies', authJwtController.isAuthenticated, async (req, res) => {
